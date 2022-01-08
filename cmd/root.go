@@ -6,10 +6,17 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
+	parser2 "github.com/HashtagMarkus/obsidian2hugo/cmd/parser"
+	"github.com/HashtagMarkus/obsidian2hugo/cmd/parser/pageparser"
 	"github.com/adrg/frontmatter"
 	"github.com/spf13/cobra"
-	"io"
+	"github.com/yuin/goldmark"
+	gast "github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 	"io/ioutil"
 	"log"
 	"os"
@@ -18,94 +25,62 @@ import (
 	"strings"
 )
 
-func CopyFile(src, dst string) error {
-	var err error
-	var srcfd *os.File
-	var dstfd *os.File
-	var srcinfo os.FileInfo
-
-	if srcfd, err = os.Open(src); err != nil {
-		return err
-	}
-	defer srcfd.Close()
-
-	if dstfd, err = os.Create(dst); err != nil {
-		return err
-	}
-	defer dstfd.Close()
-
-	if _, err = io.Copy(dstfd, srcfd); err != nil {
-		return err
-	}
-	if srcinfo, err = os.Stat(src); err != nil {
-		return err
-	}
-	return os.Chmod(dst, srcinfo.Mode())
-}
-
-// Dir copies a whole directory recursively
-func CopyDir(src string, dst string) error {
-
-	log.Printf("Copy %s to %s\n\n", src, dst)
-
-	var err error
-	var fds []os.FileInfo
-	var srcinfo os.FileInfo
-
-	if srcinfo, err = os.Stat(src); err != nil {
-		return err
-	}
-
-	if err = os.MkdirAll(dst, srcinfo.Mode()); err != nil {
-		return err
-	}
-
-	if fds, err = ioutil.ReadDir(src); err != nil {
-		return err
-	}
-	for _, fd := range fds {
-		srcfp := path.Join(src, fd.Name())
-		dstfp := path.Join(dst, fd.Name())
-
-		if fd.IsDir() {
-			if err = CopyDir(srcfp, dstfp); err != nil {
-				fmt.Println(err)
-			}
-		} else {
-			if err = CopyFile(srcfp, dstfp); err != nil {
-				fmt.Println(err)
-			}
-		}
-	}
-	return nil
-}
-
-func WalkMatch(root, pattern string) ([]string, error) {
-	var matches []string
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
-		if matched, err := filepath.Match(pattern, filepath.Base(path)); err != nil {
-			return err
-		} else if matched {
-			matches = append(matches, path)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return matches, nil
-}
-
 type FrontMatter struct {
 	Published bool `yaml:"published"`
 	Date string `yaml:"date"`
 	Tags []string `yaml:"tags"`
+}
+
+type Ext struct {
+	Title string
+	Description string
+}
+
+func (e *Ext) Extend(md goldmark.Markdown) {
+	md.Parser().AddOptions(
+		parser.WithASTTransformers(util.Prioritized(e, 999)),
+	)
+}
+
+func (e* Ext) Transform(node *gast.Document, reader text.Reader, pc parser.Context) {
+	tldrFound := false
+	//node.Dump(reader.Source(), 0)
+	for c :=  node.FirstChild(); c != nil; c = c.NextSibling() {
+		if c.Kind() == gast.KindHeading {
+			h := c.(*gast.Heading)
+			if h.Level == 1 {
+				e.Title = string(c.Text(reader.Source()))
+			} else if h.Level == 2 {
+				t := c.FirstChild().(*gast.Text)
+				h2Text := string(t.Text(reader.Source()))
+				if h2Text == "tl;dr" {
+					tldrFound = true
+				}
+			}
+		}
+		// Extract description
+		if tldrFound && c.Kind() == gast.KindParagraph {
+			fmt.Println(c.FirstChild().Kind().String())
+			e.Description = DumpStr(c, reader.Source(), "")
+			return
+		}
+	}
+}
+
+func DumpStr(c gast.Node, source []byte, str string) string {
+	res := str
+	for l := c.FirstChild(); l != nil; l = l.NextSibling() {
+		if l.Kind() == gast.KindText {
+			desc := string(l.Text(source))
+			fmt.Println(desc)
+			res = res + desc
+		} else {
+			if l.HasChildren() {
+				res = DumpStr(l, source, res)
+			}
+		}
+	}
+	return res
 }
 
 // rootCmd represents the base command when called without any subcommands
@@ -132,6 +107,7 @@ var rootCmd = &cobra.Command{
 		for _, file := range files {
 			// Read frontmatter stuff
 			f, err := os.Open(file)
+			defer f.Close()
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -144,17 +120,56 @@ var rootCmd = &cobra.Command{
 				folder := filepath.Dir(relativeFileFromSource)
 				log.Println(folder)
 
-				// TODO: copy all files inside this folder to target tree
+				// Extract Frontmatter description
+				e := Ext{}
+				gm := goldmark.New(goldmark.WithExtensions(&e))
+				bufarr, _ := ioutil.ReadFile(file)
+
+				reader := text.NewReader(bufarr)
+				gm.Parser().Parse(reader)
+
+				// Add frontmatter stuff
+				f.Seek(0,0)
+				res, err := pageparser.ParseFrontMatterAndContent(f)
+				if err != nil {
+					fmt.Println(err)
+				}
+				if len(e.Description) > 0 {
+					res.FrontMatter["description"] = e.Description // Add Desciption
+				}
+				if len(e.Title) > 0 {
+					res.FrontMatter["title"] = strings.TrimRight(e.Title, "\n")
+					res.Content = []byte(strings.Replace(string(res.Content), "# " + e.Title, "", 1))
+				}
+
+				// Copy content to target
 				CopyDir(path.Join(source, folder), path.Join(target, folder))
 
-				// TODO: do I need to patch anything else?
+
+				f2, err := os.OpenFile(path.Join(target, folder, filepath.Base(f.Name())), os.O_RDWR, 0755)
+				fmt.Println(res.FrontMatter)
+
+				var writeBuf bytes.Buffer
+				if len(res.FrontMatter) != 0 {
+					err := parser2.InterfaceToFrontMatter(res.FrontMatter, "toml", &writeBuf)
+					if err != nil {
+
+					}
+				}
+
+				writeBuf.WriteString(string(res.Content))
+				//fmt.Println(writeBuf.String())
+				f.Close()
+				f2.Truncate(0)
+				f2.Seek(0,0)
+				f2.Write(writeBuf.Bytes())
+				f2.Close()
+
 			}
 		}
 	 },
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
@@ -163,14 +178,6 @@ func Execute() {
 }
 
 func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.obsidian2hugo.yaml)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
 	rootCmd.Flags().StringP("source", "s", ".", "Source to obsidian markdown files")
 	rootCmd.Flags().StringP("destination", "d", "", "Destination of hugo folder")
 
