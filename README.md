@@ -19,7 +19,7 @@ Flags:
 
 ## Description
 
-
+Read more about this tool in my [blog](https://task2.net/posts/2022-01-10-obsidian2hugo-exporter/2022-01-10-obsidian2hugo-exporter/)
 
 ## Additional notes
 
