@@ -23,4 +23,4 @@ Read more about this tool in my [blog](https://task2.net/posts/2022-01-10-obsidi
 
 ## Additional notes
 
-The subdirectory code was taken from the [hugo repository](https://github.com/gohugoio/hugo) in compliance with the Apache License 2.0. The code under the `parser` subdirectory was not changed  by the author of obsidian2hugo.
+The code under the subdirectory `cmd/parser` was taken from the [hugo repository](https://github.com/gohugoio/hugo) in compliance with the Apache License 2.0. The code under said subdirectory was not changed by the author of obsidian2hugo.
