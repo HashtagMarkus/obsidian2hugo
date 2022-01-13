@@ -46,6 +46,7 @@ var rootCmd = &cobra.Command{
 			log.Fatal("Cannot get absolute file path from `source`")
 		}
 		descriptionTag, _ := cmd.Flags().GetString("descriptionSection")
+		keepDescriptionTag, _ := cmd.Flags().GetBool("keepDescriptionTitle")
 		keepTitle, _ := cmd.Flags().GetBool("keepTitle")
 
 		files, err := WalkMatch(source, "*.md")
@@ -86,6 +87,9 @@ var rootCmd = &cobra.Command{
 						res.Content = []byte(strings.Replace(string(res.Content), "# " + e.Title, "", 1))
 					}
 				}
+				if !keepDescriptionTag {
+					res.Content = []byte(strings.Replace(string(res.Content), "## "+descriptionTag, "", 1))
+				}
 
 				// Copy content to target
 				CopyDir(path.Join(source, folder), path.Join(target, folder))
@@ -122,8 +126,9 @@ func Execute() {
 func init() {
 	rootCmd.Flags().StringP("source", "s", ".", "Source to obsidian markdown files (root of blog posts tree, e.g.: <obsidianvault>/blogposts)")
 	rootCmd.Flags().StringP("destination", "d", "", "Destination of hugo posts folder (e.g. <hugoroot>/content/posts)")
-	rootCmd.Flags().BoolP("keepTitle", "k", false, "Don't delete h1 header after frontmatter extraction")
+	rootCmd.Flags().BoolP("keepTitle", "kt", false, "Don't delete h1 header after frontmatter extraction")
 	rootCmd.Flags().StringP("descriptionSection", "t", "tl;dr", "The content below this h2 header is used as the frontmatter description")
+	rootCmd.Flags().BoolP("keepDescriptionTitle", "kd", false, "Don't delete the h2 header of the description after frontmatter extraction")
 
 	rootCmd.MarkFlagRequired("destination")
 }
