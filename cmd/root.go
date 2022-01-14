@@ -126,9 +126,9 @@ func Execute() {
 func init() {
 	rootCmd.Flags().StringP("source", "s", ".", "Source to obsidian markdown files (root of blog posts tree, e.g.: <obsidianvault>/blogposts)")
 	rootCmd.Flags().StringP("destination", "d", "", "Destination of hugo posts folder (e.g. <hugoroot>/content/posts)")
-	rootCmd.Flags().BoolP("keepTitle", "kt", false, "Don't delete h1 header after frontmatter extraction")
+	rootCmd.Flags().BoolP("keepTitle", "k", false, "Don't delete h1 header after frontmatter extraction")
 	rootCmd.Flags().StringP("descriptionSection", "t", "tl;dr", "The content below this h2 header is used as the frontmatter description")
-	rootCmd.Flags().BoolP("keepDescriptionTitle", "kd", false, "Don't delete the h2 header of the description after frontmatter extraction")
+	rootCmd.Flags().BoolP("keepDescriptionTitle", "c", false, "Don't delete the h2 header of the description after frontmatter extraction")
 
 	rootCmd.MarkFlagRequired("destination")
 }
