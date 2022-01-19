@@ -13,6 +13,7 @@ Flags:
   -t, --descriptionSection string   The content below this h2 header is used as the frontmatter description (default "tl;dr")
   -d, --destination string          Destination of hugo posts folder (e.g. <hugoroot>/content/posts)
   -h, --help                        help for obsidian2hugo
+  -c, --keepDescriptionTitle        Don't delete the h2 header of the description after frontmatter extraction
   -k, --keepTitle                   Don't delete h1 header after frontmatter extraction
   -s, --source string               Source to obsidian markdown files (root of blog posts tree, e.g.: <obsidianvault>/blogposts) (default ".")
 ```
